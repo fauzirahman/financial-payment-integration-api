@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/fauzirahman/financial-payment-integration-api/internal/config"
+	"github.com/fauzirahman/financial-payment-integration-api/internal/database"
 )
 
 type HealthResponse struct {
@@ -32,12 +37,39 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Println("Config error:", err)
+		return
+	}
+
+	db, err := database.NewPostgresPool(cfg.DatabaseURL)
+	if err != nil {
+		fmt.Println("Database error:", err)
+		return
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var result int
+
+	err = db.QueryRow(ctx, "SELECT 1").Scan(&result)
+	if err != nil {
+		fmt.Println("Database query error:", err)
+		return
+	}
+
+	fmt.Println("Database connection successful")
+	fmt.Println("SELECT 1 result:", result)
+
 	http.HandleFunc("/health", healthHandler)
 
 	fmt.Println("Financial Payment Integration API")
-	fmt.Println("Server running on http://localhost:8080")
+	fmt.Printf("Server running on http://localhost:%s\n", cfg.AppPort)
 
-	err := http.ListenAndServe(":8080", nil)
+	err = http.ListenAndServe(":"+cfg.AppPort, nil)
 
 	if err != nil {
 		fmt.Println("Server error:", err)
