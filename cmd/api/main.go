@@ -9,6 +9,9 @@ import (
 
 	"github.com/fauzirahman/financial-payment-integration-api/internal/config"
 	"github.com/fauzirahman/financial-payment-integration-api/internal/database"
+	"github.com/fauzirahman/financial-payment-integration-api/internal/handler"
+	"github.com/fauzirahman/financial-payment-integration-api/internal/repository"
+	"github.com/fauzirahman/financial-payment-integration-api/internal/service"
 )
 
 type HealthResponse struct {
@@ -64,13 +67,29 @@ func main() {
 	fmt.Println("Database connection successful")
 	fmt.Println("SELECT 1 result:", result)
 
+	paymentRepository := repository.NewPostgresPaymentRepository(db)
+	paymentService := service.NewPaymentService(paymentRepository)
+	paymentHandler := handler.NewPaymentHandler(paymentService)
+
 	http.HandleFunc("/health", healthHandler)
+
+	http.HandleFunc("/api/v1/payments", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			paymentHandler.GetPayments(w, r)
+
+		case http.MethodPost:
+			paymentHandler.CreatePayment(w, r)
+
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	fmt.Println("Financial Payment Integration API")
 	fmt.Printf("Server running on http://localhost:%s\n", cfg.AppPort)
 
 	err = http.ListenAndServe(":"+cfg.AppPort, nil)
-
 	if err != nil {
 		fmt.Println("Server error:", err)
 	}
