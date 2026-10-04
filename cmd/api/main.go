@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fauzirahman/financial-payment-integration-api/internal/config"
@@ -69,9 +70,48 @@ func main() {
 
 	paymentRepository := repository.NewPostgresPaymentRepository(db)
 	paymentService := service.NewPaymentService(paymentRepository)
+	customerRepository := repository.NewPostgresCustomerRepository(db)
+	customerService := service.NewCustomerService(customerRepository)
+	accountRepository := repository.NewPostgresAccountRepository(db)
+	accountService := service.NewAccountService(accountRepository)
 	paymentHandler := handler.NewPaymentHandler(paymentService)
+	customerHandler := handler.NewCustomerHandler(customerService)
+	accountHandler := handler.NewAccountHandler(accountService)
+	webhookHandler := handler.NewWebhookHandler(paymentService, cfg.WebhookSecret)
 
 	http.HandleFunc("/health", healthHandler)
+	http.Handle("/swagger/", http.StripPrefix("/swagger/", http.FileServer(http.Dir("./docs"))))
+	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger/", http.StatusTemporaryRedirect)
+	})
+
+	http.HandleFunc("/api/v1/customers", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			customerHandler.GetCustomers(w, r)
+		case http.MethodPost:
+			customerHandler.CreateCustomer(w, r)
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	http.HandleFunc("/api/v1/customers/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/customers/")
+		if strings.Contains(path, "/accounts") || strings.HasSuffix(path, "/accounts") {
+			accountHandler.GetAccountsByCustomerID(w, r)
+			return
+		}
+		customerHandler.GetCustomerByID(w, r)
+	})
+
+	http.HandleFunc("/api/v1/accounts", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			accountHandler.CreateAccount(w, r)
+			return
+		}
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	})
+	http.HandleFunc("/api/v1/accounts/", accountHandler.GetAccountByID)
 
 	http.HandleFunc("/api/v1/payments", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -85,6 +125,9 @@ func main() {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})
+
+	http.HandleFunc("/api/v1/payments/", paymentHandler.GetPaymentByID)
+	http.HandleFunc("/api/v1/webhooks/payment", webhookHandler.HandlePaymentWebhook)
 
 	fmt.Println("Financial Payment Integration API")
 	fmt.Printf("Server running on http://localhost:%s\n", cfg.AppPort)

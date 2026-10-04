@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	AppPort     string
-	DatabaseURL string
+	AppPort      string
+	DatabaseURL  string
+	WebhookSecret string
 }
 
 func Load() (*Config, error) {
@@ -23,9 +24,11 @@ func Load() (*Config, error) {
 	}
 
 	databaseURL := os.Getenv("DATABASE_URL")
+	webhookSecret := os.Getenv("WEBHOOK_SECRET")
 
 	return &Config{
-		AppPort:     appPort,
-		DatabaseURL: databaseURL,
+		AppPort:       appPort,
+		DatabaseURL:   databaseURL,
+		WebhookSecret: webhookSecret,
 	}, nil
 }

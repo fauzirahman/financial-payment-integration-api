@@ -1,0 +1,321 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Financial Payment Integration API",
+    "version": "1.0.0",
+    "description": "Demo backend for payment, idempotency, webhook, retry, and ledger workflows."
+  },
+  "servers": [
+    { "url": "http://localhost:8080" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
+    "/api/v1/payments": {
+      "get": {
+        "summary": "List payments",
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      },
+      "post": {
+        "summary": "Create payment",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": { "type": "string" },
+            "required": false
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reference", "amount", "currency"],
+                "properties": {
+                  "reference": { "type": "string", "maxLength": 100, "example": "PAY-2026-0001" },
+                  "amount": { "type": "integer", "format": "int64", "minimum": 1, "example": 150000 },
+                  "currency": { "type": "string", "pattern": "^[A-Za-z]{3}$", "example": "IDR" }
+                }
+              },
+              "examples": {
+                "createPayment": {
+                  "summary": "Create a pending IDR payment",
+                  "value": { "reference": "PAY-2026-0001", "amount": 150000, "currency": "IDR" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": 1,
+                  "reference": "PAY-2026-0001",
+                  "amount": 150000,
+                  "currency": "IDR",
+                  "status": "PENDING",
+                  "created_at": "2026-10-04T10:30:00Z",
+                  "updated_at": "2026-10-04T10:30:00Z"
+                }
+              }
+            }
+          },
+          "400": { "description": "Bad Request" },
+          "409": { "description": "Conflict" }
+        }
+      }
+    },
+    "/api/v1/customers": {
+      "get": {
+        "summary": "List customers",
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      },
+      "post": {
+        "summary": "Create customer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["customer_number", "name", "email"],
+                "properties": {
+                  "customer_number": { "type": "string", "maxLength": 30, "pattern": "^[A-Za-z0-9_-]+$", "example": "CUST-0001" },
+                  "name": { "type": "string", "maxLength": 150, "example": "Ada Lovelace" },
+                  "email": { "type": "string", "format": "email", "maxLength": 150, "example": "ada@example.com" },
+                  "phone": { "type": "string", "maxLength": 30, "example": "+62 812-3456-7890" },
+                  "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "SUSPENDED"], "default": "ACTIVE", "example": "ACTIVE" }
+                }
+              },
+              "examples": {
+                "createCustomer": {
+                  "summary": "Create a customer",
+                  "value": {
+                    "customer_number": "CUST-0001",
+                    "name": "Ada Lovelace",
+                    "email": "ada@example.com",
+                    "phone": "+62 812-3456-7890",
+                    "status": "ACTIVE"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "550e8400-e29b-41d4-a716-446655440000",
+                  "customer_number": "CUST-0001",
+                  "name": "Ada Lovelace",
+                  "email": "ada@example.com",
+                  "phone": "+62 812-3456-7890",
+                  "status": "ACTIVE",
+                  "created_at": "2026-10-04T10:30:00Z",
+                  "updated_at": "2026-10-04T10:30:00Z"
+                }
+              }
+            }
+          },
+          "400": { "description": "Bad Request" }
+        }
+      }
+    },
+    "/api/v1/customers/{id}": {
+      "get": {
+        "summary": "Get customer by ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Success" },
+          "404": { "description": "Not Found" }
+        }
+      }
+    },
+    "/api/v1/customers/{customer_id}/accounts": {
+      "get": {
+        "summary": "List accounts for customer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/api/v1/accounts": {
+      "post": {
+        "summary": "Create account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["customer_id", "account_number", "currency"],
+                "properties": {
+                  "customer_id": { "type": "string", "format": "uuid", "example": "550e8400-e29b-41d4-a716-446655440000" },
+                  "account_number": { "type": "string", "maxLength": 30, "pattern": "^[A-Za-z0-9_-]+$", "example": "ACC-0001" },
+                  "currency": { "type": "string", "pattern": "^[A-Za-z]{3}$", "example": "IDR" },
+                  "balance": { "type": "integer", "format": "int64", "minimum": 0, "default": 0, "example": 0 },
+                  "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "SUSPENDED"], "default": "ACTIVE", "example": "ACTIVE" }
+                }
+              },
+              "examples": {
+                "createAccount": {
+                  "summary": "Open an IDR account",
+                  "value": {
+                    "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "account_number": "ACC-0001",
+                    "currency": "IDR",
+                    "balance": 0,
+                    "status": "ACTIVE"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "660e8400-e29b-41d4-a716-446655440000",
+                  "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+                  "account_number": "ACC-0001",
+                  "currency": "IDR",
+                  "balance": 0,
+                  "status": "ACTIVE",
+                  "created_at": "2026-10-04T10:30:00Z",
+                  "updated_at": "2026-10-04T10:30:00Z"
+                }
+              }
+            }
+          },
+          "400": { "description": "Bad Request" }
+        }
+      }
+    },
+    "/api/v1/accounts/{id}": {
+      "get": {
+        "summary": "Get account by ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid", "example": "660e8400-e29b-41d4-a716-446655440000" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "660e8400-e29b-41d4-a716-446655440000",
+                  "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+                  "account_number": "ACC-0001",
+                  "currency": "IDR",
+                  "balance": 0,
+                  "status": "ACTIVE",
+                  "created_at": "2026-10-04T10:30:00Z",
+                  "updated_at": "2026-10-04T10:30:00Z"
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid UUID" },
+          "404": { "description": "Account not found" }
+        }
+      }
+    },
+    "/api/v1/payments/{id}": {
+      "get": {
+        "summary": "Get payment by ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Success" },
+          "404": { "description": "Not Found" }
+        }
+      }
+    },
+    "/api/v1/webhooks/payment": {
+      "post": {
+        "summary": "Payment webhook receiver",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Webhook-Signature",
+            "schema": { "type": "string" },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["event_id", "type", "reference"],
+                "properties": {
+                  "event_id": { "type": "string", "example": "evt_20261004_0001" },
+                  "type": { "type": "string", "enum": ["payment.success", "payment.failed", "payment.pending", "payment.refunded"], "example": "payment.success" },
+                  "reference": { "type": "string", "example": "PAY-2026-0001" }
+                }
+              },
+              "examples": {
+                "paymentSucceeded": {
+                  "summary": "Successful payment event",
+                  "value": { "event_id": "evt_20261004_0001", "type": "payment.success", "reference": "PAY-2026-0001" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    }
+  }
+}

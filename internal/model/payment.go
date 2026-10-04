@@ -1,6 +1,16 @@
 package model
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+const PaymentStatusPending = "PENDING"
+const PaymentStatusProcessing = "PROCESSING"
+const PaymentStatusSuccess = "SUCCESS"
+const PaymentStatusFailed = "FAILED"
+
+var ErrInvalidPaymentTransition = errors.New("invalid payment status transition")
 
 type Payment struct {
 	ID        int64     `json:"id"`
