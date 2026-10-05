@@ -1,8 +1,8 @@
-# Financial Payment Integration API
+# Financial Payment Integration API - Go
 
 REST API berbasis Go untuk demo integrasi pembayaran dan pemodelan domain keuangan. Kode saat ini menyediakan API payment, idempotency key, verifikasi signature webhook, transisi status, posting ledger debit/kredit, endpoint customer/account, static Swagger UI, serta simulasi in-memory retry queue.
 
-Payment dan webhook menggunakan repository PostgreSQL. Customer/account handler dan repository juga tersedia, tetapi migrasi domain `005`/`006` belum kompatibel dengan skema payment runtime `001`-`004`; lihat catatan database sebelum menjalankan endpoint tersebut.
+Payment dan webhook menggunakan repository PostgreSQL. Customer/account API juga memiliki tabel runtime yang kompatibel melalui migration `007`. Migration domain `005`/`006` tetap merupakan rancangan berbeda yang tidak boleh dicampur langsung dengan skema payment runtime `001`-`004`.
 
 ## Masalah Bisnis
 
@@ -104,7 +104,7 @@ Response `201 Created`:
 - `GET /api/v1/accounts/{id}`
 - `GET /api/v1/customers/{customer_id}/accounts`
 
-Validasi customer/account tersedia di service. Endpoint ini memerlukan tabel domain yang didefinisikan pada migration `005`/`006`; skema tersebut saat ini belum dapat digunakan bersama payment repository tanpa rekonsiliasi migrasi.
+Validasi customer/account tersedia di service. Pastikan migration `007_create_customers_and_accounts.sql` sudah dijalankan agar tabel yang dibaca repository tersedia.
 
 ### Swagger UI
 
@@ -121,17 +121,18 @@ Setelah server berjalan, buka `http://localhost:8080/docs` atau `http://localhos
 
 Jalur migration yang sesuai dengan payment/webhook repository saat ini adalah `001_create_payments.sql` sampai `004_create_idempotency_and_ledger.sql`. Jalur ini menggunakan payment ID BIGINT, tabel `webhook_events`, `idempotency_keys`, dan `ledger_entries` berbasis `payment_reference`.
 
-Migration `005_financial_domain_schema.sql` dan `006_full_financial_domain_schema.sql` adalah rancangan domain yang lebih luas, tetapi mendefinisikan ulang tabel yang sama dengan kolom/tipe berbeda (misalnya UUID payment ID dan struktur ledger berbeda). Jangan jalankan migration tersebut sebagai rangkaian setelah `001`-`004` untuk deployment aktif sebelum dibuat migration rekonsiliasi. Endpoint customer/account sudah terdaftar, tetapi persistence-nya belum terintegrasi aman ke skema aktif.
+Migration `007_create_customers_and_accounts.sql` membuat tabel `customers` dan `accounts` sesuai kontrak repository Go saat ini dan aman dijalankan setelah `001`-`004`. Migration `005_financial_domain_schema.sql` dan `006_full_financial_domain_schema.sql` adalah rancangan domain yang lebih luas, tetapi mendefinisikan ulang tabel yang sama dengan kolom/tipe berbeda (misalnya UUID payment ID dan struktur ledger berbeda). Jangan jalankan `005`/`006` sebagai rangkaian setelah `001`-`004` untuk deployment aktif sebelum dibuat migration rekonsiliasi.
 
 ## Menjalankan
 
-Persyaratan: Go dan PostgreSQL. Atur `DATABASE_URL`, `APP_PORT` (opsional, default `8080`), dan `WEBHOOK_SECRET` (diperlukan untuk menerima webhook). Jalankan empat migration yang kompatibel secara berurutan:
+Persyaratan: Go dan PostgreSQL. Atur `DATABASE_URL`, `APP_PORT` (opsional, default `8080`), dan `WEBHOOK_SECRET` (diperlukan untuk menerima webhook). Jalankan migration yang kompatibel secara berurutan:
 
 ```sh
 psql "$DATABASE_URL" -f migrations/001_create_payments.sql
 psql "$DATABASE_URL" -f migrations/002_create_payment_indexes.sql
 psql "$DATABASE_URL" -f migrations/003_create_webhook_events.sql
 psql "$DATABASE_URL" -f migrations/004_create_idempotency_and_ledger.sql
+psql "$DATABASE_URL" -f migrations/007_create_customers_and_accounts.sql
 ```
 
 Jalankan API dan test:
@@ -160,6 +161,6 @@ Contoh signature webhook dapat dibuat dengan HMAC-SHA256 atas bytes body persis 
 - Idempotency key disimpan atomik bersama payment dan menolak pemakaian ulang, tetapi belum menyimpan dan me-replay hasil request sebelumnya.
 - Retry queue adalah utilitas in-memory, belum dihubungkan ke pemrosesan webhook dan hilang saat proses berhenti.
 - Posting ledger memakai dua kode akun demo tetap; belum ada konfigurasi chart of accounts atau validasi saldo lintas mata uang.
-- Migration domain customer/account perlu direkonsiliasi dengan skema payment sebelum seluruh endpoint domain dapat dipakai bersama.
+- Domain finansial lengkap pada migration `005`/`006` masih perlu direkonsiliasi dengan skema payment aktif.
 - Gunakan hanya untuk demo/pembelajaran, bukan pemrosesan uang produksi.
 

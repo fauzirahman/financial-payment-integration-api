@@ -94,7 +94,7 @@ func (r *PostgresCustomerRepository) List(ctx context.Context) ([]model.Customer
 	}
 	defer rows.Close()
 
-	var customers []model.Customer
+	customers := make([]model.Customer, 0)
 	for rows.Next() {
 		var customer model.Customer
 		if err := rows.Scan(
