@@ -14,7 +14,7 @@ var ErrIdempotencyKeyExists = errors.New("idempotency key already exists")
 
 type PaymentRepository interface {
 	FindAll(ctx context.Context) ([]model.Payment, error)
-	FindByID(ctx context.Context, id int64) (*model.Payment, error)
+	FindByID(ctx context.Context, id string) (*model.Payment, error)
 	FindByReference(ctx context.Context, reference string) (*model.Payment, error)
 	Create(ctx context.Context, payment *model.Payment) error
 	CreateWithIdempotencyKey(ctx context.Context, payment *model.Payment, key *model.IdempotencyKey) error
@@ -35,15 +35,15 @@ func NewPostgresPaymentRepository(db *pgxpool.Pool) *PostgresPaymentRepository {
 func (r *PostgresPaymentRepository) FindAll(ctx context.Context) ([]model.Payment, error) {
 	query := `
 		SELECT
-			id,
-			reference,
+			id::text,
+			payment_number,
 			amount,
-			currency,
+			TRIM(currency),
 			status,
 			created_at,
 			updated_at
 		FROM payments
-		ORDER BY id ASC
+		ORDER BY created_at ASC
 	`
 
 	rows, err := r.db.Query(ctx, query)
@@ -81,13 +81,13 @@ func (r *PostgresPaymentRepository) FindAll(ctx context.Context) ([]model.Paymen
 	return payments, nil
 }
 
-func (r *PostgresPaymentRepository) FindByID(ctx context.Context, id int64) (*model.Payment, error) {
+func (r *PostgresPaymentRepository) FindByID(ctx context.Context, id string) (*model.Payment, error) {
 	query := `
 		SELECT
-			id,
-			reference,
+			id::text,
+			payment_number,
 			amount,
-			currency,
+			TRIM(currency),
 			status,
 			created_at,
 			updated_at
@@ -115,15 +115,15 @@ func (r *PostgresPaymentRepository) FindByID(ctx context.Context, id int64) (*mo
 func (r *PostgresPaymentRepository) FindByReference(ctx context.Context, reference string) (*model.Payment, error) {
 	query := `
 		SELECT
-			id,
-			reference,
+			id::text,
+			payment_number,
 			amount,
-			currency,
+			TRIM(currency),
 			status,
 			created_at,
 			updated_at
 		FROM payments
-		WHERE reference = $1
+		WHERE payment_number = $1
 	`
 
 	var payment model.Payment

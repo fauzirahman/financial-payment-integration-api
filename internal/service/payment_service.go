@@ -29,7 +29,7 @@ func (s *PaymentService) GetAllPayments(ctx context.Context) ([]model.Payment, e
 	return s.repository.FindAll(ctx)
 }
 
-func (s *PaymentService) GetPaymentByID(ctx context.Context, id int64) (*model.Payment, error) {
+func (s *PaymentService) GetPaymentByID(ctx context.Context, id string) (*model.Payment, error) {
 	return s.repository.FindByID(ctx, id)
 }
 
@@ -70,7 +70,7 @@ func (s *PaymentService) CreatePaymentWithIdempotency(ctx context.Context, payme
 		}
 	}
 
-	payment.ID = 0
+	payment.ID = ""
 	payment.Status = model.PaymentStatusPending
 
 	if idempotencyKey == "" {

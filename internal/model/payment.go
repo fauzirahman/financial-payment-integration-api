@@ -13,7 +13,7 @@ const PaymentStatusFailed = "FAILED"
 var ErrInvalidPaymentTransition = errors.New("invalid payment status transition")
 
 type Payment struct {
-	ID        int64     `json:"id"`
+	ID        string    `json:"id"`
 	Reference string    `json:"reference"`
 	Amount    int64     `json:"amount"`
 	Currency  string    `json:"currency"`

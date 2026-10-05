@@ -21,7 +21,7 @@ func (r *paymentRepositoryStub) FindAll(context.Context) ([]model.Payment, error
 	return nil, nil
 }
 
-func (r *paymentRepositoryStub) FindByID(context.Context, int64) (*model.Payment, error) {
+func (r *paymentRepositoryStub) FindByID(context.Context, string) (*model.Payment, error) {
 	return nil, nil
 }
 

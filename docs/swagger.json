@@ -62,7 +62,7 @@
             "content": {
               "application/json": {
                 "example": {
-                  "id": 1,
+                  "id": "550e8400-e29b-41d4-a716-446655440000",
                   "reference": "PAY-2026-0001",
                   "amount": 150000,
                   "currency": "IDR",
@@ -269,7 +269,7 @@
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "integer" }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {

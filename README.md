@@ -2,7 +2,7 @@
 
 REST API berbasis Go untuk demo integrasi pembayaran dan pemodelan domain keuangan. Kode saat ini menyediakan API payment, idempotency key, verifikasi signature webhook, transisi status, posting ledger debit/kredit, endpoint customer/account, static Swagger UI, serta simulasi in-memory retry queue.
 
-Payment dan webhook menggunakan repository PostgreSQL. Customer/account API juga memiliki tabel runtime yang kompatibel melalui migration `007`. Migration domain `005`/`006` tetap merupakan rancangan berbeda yang tidak boleh dicampur langsung dengan skema payment runtime `001`-`004`.
+Customer/account API memakai tabel Neon melalui migration `007`. Payment GET telah disesuaikan untuk membaca skema Neon yang memakai UUID `id` dan kolom `payment_number` (dipetakan menjadi field API `reference`). Payment create, idempotency, webhook, dan ledger repository masih memakai kontrak migration legacy `001`-`004`; jangan menganggap operasi tulis tersebut kompatibel dengan schema Neon saat ini sebelum diselaraskan.
 
 ## Masalah Bisnis
 
@@ -60,7 +60,7 @@ Kode akun demo yang dipakai adalah `1010` (debit) dan `2010` (kredit). Ini simul
 
 ## API
 
-### Membuat payment
+### Membuat payment (skema legacy)
 
 `POST /api/v1/payments`
 
@@ -90,11 +90,11 @@ Response `201 Created`:
 
 ### Melihat semua payment
 
-`GET /api/v1/payments` mengembalikan array payment. Jika belum ada transaksi, response berupa `[]`.
+`GET /api/v1/payments` membaca payment dari schema Neon aktif dan mengembalikan array. Jika belum ada transaksi, response berupa `[]`.
 
 ### Melihat payment berdasarkan ID
 
-`GET /api/v1/payments/{id}` mengembalikan satu payment. ID yang tidak ditemukan menghasilkan `404 Not Found`.
+`GET /api/v1/payments/{id}` menerima UUID Neon, mengembalikan satu payment, dan menghasilkan `404 Not Found` jika tidak ditemukan.
 
 ### Customer dan account
 
@@ -119,7 +119,7 @@ Setelah server berjalan, buka `http://localhost:8080/docs` atau `http://localhos
 
 ## Database
 
-Jalur migration yang sesuai dengan payment/webhook repository saat ini adalah `001_create_payments.sql` sampai `004_create_idempotency_and_ledger.sql`. Jalur ini menggunakan payment ID BIGINT, tabel `webhook_events`, `idempotency_keys`, dan `ledger_entries` berbasis `payment_reference`.
+Migration `001_create_payments.sql` sampai `004_create_idempotency_and_ledger.sql` mendefinisikan kontrak legacy: payment ID BIGINT dan kolom `reference`. Database Neon yang sedang digunakan memiliki payment ID UUID, kolom `payment_number`, serta kolom domain lain. Repository payment GET sudah memetakan kontrak Neon; payment create/idempotency/webhook/ledger belum sepenuhnya dimigrasikan.
 
 Migration `007_create_customers_and_accounts.sql` membuat tabel `customers` dan `accounts` sesuai kontrak repository Go saat ini dan aman dijalankan setelah `001`-`004`. Migration `005_financial_domain_schema.sql` dan `006_full_financial_domain_schema.sql` adalah rancangan domain yang lebih luas, tetapi mendefinisikan ulang tabel yang sama dengan kolom/tipe berbeda (misalnya UUID payment ID dan struktur ledger berbeda). Jangan jalankan `005`/`006` sebagai rangkaian setelah `001`-`004` untuk deployment aktif sebelum dibuat migration rekonsiliasi.
 
@@ -150,7 +150,7 @@ curl -X POST http://localhost:8080/api/v1/payments \
 	-d '{"reference":"PAY-001","amount":150000,"currency":"IDR"}'
 
 curl http://localhost:8080/api/v1/payments
-curl http://localhost:8080/api/v1/payments/1
+curl http://localhost:8080/api/v1/payments/550e8400-e29b-41d4-a716-446655440000
 ```
 
 Contoh signature webhook dapat dibuat dengan HMAC-SHA256 atas bytes body persis seperti dikirim, menggunakan secret yang sama dengan `WEBHOOK_SECRET`.

@@ -21,7 +21,7 @@ func (r *paymentRepositoryStub) FindAll(context.Context) ([]model.Payment, error
 	return []model.Payment{}, nil
 }
 
-func (r *paymentRepositoryStub) FindByID(_ context.Context, id int64) (*model.Payment, error) {
+func (r *paymentRepositoryStub) FindByID(_ context.Context, id string) (*model.Payment, error) {
 	if r.payment == nil || r.payment.ID != id {
 		return nil, pgx.ErrNoRows
 	}
@@ -36,13 +36,13 @@ func (r *paymentRepositoryStub) FindByReference(_ context.Context, reference str
 }
 
 func (r *paymentRepositoryStub) Create(_ context.Context, payment *model.Payment) error {
-	payment.ID = 1
+	payment.ID = "550e8400-e29b-41d4-a716-446655440000"
 	r.payment = payment
 	return nil
 }
 
 func (r *paymentRepositoryStub) CreateWithIdempotencyKey(_ context.Context, payment *model.Payment, _ *model.IdempotencyKey) error {
-	payment.ID = 1
+	payment.ID = "550e8400-e29b-41d4-a716-446655440000"
 	r.payment = payment
 	return nil
 }
@@ -80,7 +80,7 @@ func TestCreatePaymentReturnsCreatedPayment(t *testing.T) {
 func TestGetPaymentByIDReturnsNotFound(t *testing.T) {
 	service := service.NewPaymentService(&paymentRepositoryStub{})
 	handler := NewPaymentHandler(service)
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/payments/99", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/payments/550e8400-e29b-41d4-a716-446655440099", nil)
 	response := httptest.NewRecorder()
 
 	handler.GetPaymentByID(response, request)
