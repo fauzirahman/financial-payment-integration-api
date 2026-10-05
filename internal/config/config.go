@@ -7,8 +7,8 @@ import (
 )
 
 type Config struct {
-	AppPort      string
-	DatabaseURL  string
+	AppPort       string
+	DatabaseURL   string
 	WebhookSecret string
 }
 
@@ -18,7 +18,10 @@ func Load() (*Config, error) {
 	// yang sudah tersedia tetap dapat digunakan.
 	_ = godotenv.Load()
 
-	appPort := os.Getenv("APP_PORT")
+	appPort := os.Getenv("PORT")
+	if appPort == "" {
+		appPort = os.Getenv("APP_PORT")
+	}
 	if appPort == "" {
 		appPort = "8080"
 	}

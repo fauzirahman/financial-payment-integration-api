@@ -130,7 +130,7 @@ func main() {
 	http.HandleFunc("/api/v1/webhooks/payment", webhookHandler.HandlePaymentWebhook)
 
 	fmt.Println("Financial Payment Integration API")
-	fmt.Printf("Server running on http://localhost:%s\n", cfg.AppPort)
+	fmt.Printf("Server listening on port %s\n", cfg.AppPort)
 
 	err = http.ListenAndServe(":"+cfg.AppPort, nil)
 	if err != nil {
