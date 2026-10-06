@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	swaggerdocs "github.com/fauzirahman/financial-payment-integration-api/docs"
 	"github.com/fauzirahman/financial-payment-integration-api/internal/config"
 	"github.com/fauzirahman/financial-payment-integration-api/internal/database"
 	"github.com/fauzirahman/financial-payment-integration-api/internal/handler"
@@ -80,7 +81,7 @@ func main() {
 	webhookHandler := handler.NewWebhookHandler(paymentService, cfg.WebhookSecret)
 
 	http.HandleFunc("/health", healthHandler)
-	http.Handle("/swagger/", http.StripPrefix("/swagger/", http.FileServer(http.Dir("./docs"))))
+	http.Handle("/swagger/", http.StripPrefix("/swagger/", http.FileServer(http.FS(swaggerdocs.Files))))
 	http.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/swagger/", http.StatusTemporaryRedirect)
 	})
