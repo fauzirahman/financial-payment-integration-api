@@ -6,7 +6,7 @@
     "description": "Demo backend for payment, idempotency, webhook, retry, and ledger workflows."
   },
   "servers": [
-    { "url": "http://localhost:8080" }
+    { "url": "/" }
   ],
   "paths": {
     "/health": {
