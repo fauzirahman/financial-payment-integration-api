@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/fauzirahman/financial-payment-integration-api/internal/model"
@@ -18,7 +19,7 @@ type PaymentHandler struct {
 	service *service.PaymentService
 }
 
-var paymentIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+var paymentIDPattern = regexp.MustCompile(`^[1-9][0-9]*$`)
 
 func NewPaymentHandler(service *service.PaymentService) *PaymentHandler {
 	return &PaymentHandler{
@@ -88,7 +89,8 @@ func (h *PaymentHandler) GetPaymentByID(w http.ResponseWriter, r *http.Request) 
 	}
 
 	id := strings.TrimPrefix(r.URL.Path, "/api/v1/payments/")
-	if !paymentIDPattern.MatchString(id) {
+	parsedID, err := strconv.ParseInt(id, 10, 64)
+	if !paymentIDPattern.MatchString(id) || err != nil || parsedID < 1 {
 		writeError(w, http.StatusBadRequest, "invalid payment id")
 		return
 	}

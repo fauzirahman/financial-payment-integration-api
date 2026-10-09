@@ -62,7 +62,7 @@
             "content": {
               "application/json": {
                 "example": {
-                  "id": "550e8400-e29b-41d4-a716-446655440000",
+                  "id": "1",
                   "reference": "PAY-2026-0001",
                   "amount": 150000,
                   "currency": "IDR",
@@ -269,13 +269,44 @@
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": { "type": "string", "pattern": "^[1-9][0-9]*$", "example": "42" }
           }
         ],
         "responses": {
           "200": { "description": "Success" },
           "404": { "description": "Not Found" }
         }
+      }
+    },
+    "/api/v1/reports/payment-summary": {
+      "get": {
+        "summary": "Payment summary by currency and status",
+        "parameters": [
+          { "in": "query", "name": "from", "schema": { "type": "string", "format": "date" } },
+          { "in": "query", "name": "to", "schema": { "type": "string", "format": "date" } }
+        ],
+        "responses": { "200": { "description": "Payment totals grouped by currency" }, "400": { "description": "Invalid date range" } }
+      }
+    },
+    "/api/v1/reports/daily-payments": {
+      "get": {
+        "summary": "Daily payment report by currency",
+        "parameters": [
+          { "in": "query", "name": "from", "schema": { "type": "string", "format": "date" } },
+          { "in": "query", "name": "to", "schema": { "type": "string", "format": "date" } }
+        ],
+        "responses": { "200": { "description": "Daily payment totals" }, "400": { "description": "Invalid date range" } }
+      }
+    },
+    "/api/v1/reports/general-ledger": {
+      "get": {
+        "summary": "General ledger with running balances",
+        "parameters": [
+          { "in": "query", "name": "from", "schema": { "type": "string", "format": "date" } },
+          { "in": "query", "name": "to", "schema": { "type": "string", "format": "date" } },
+          { "in": "query", "name": "account_code", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Posted ledger entries" }, "400": { "description": "Invalid date range" } }
       }
     },
     "/api/v1/webhooks/payment": {

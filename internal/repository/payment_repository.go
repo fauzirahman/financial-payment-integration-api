@@ -36,7 +36,7 @@ func (r *PostgresPaymentRepository) FindAll(ctx context.Context) ([]model.Paymen
 	query := `
 		SELECT
 			id::text,
-			payment_number,
+			reference,
 			amount,
 			TRIM(currency),
 			status,
@@ -85,14 +85,14 @@ func (r *PostgresPaymentRepository) FindByID(ctx context.Context, id string) (*m
 	query := `
 		SELECT
 			id::text,
-			payment_number,
+			reference,
 			amount,
 			TRIM(currency),
 			status,
 			created_at,
 			updated_at
 		FROM payments
-		WHERE id = $1
+		WHERE id = $1::bigint
 	`
 
 	var payment model.Payment
@@ -116,14 +116,14 @@ func (r *PostgresPaymentRepository) FindByReference(ctx context.Context, referen
 	query := `
 		SELECT
 			id::text,
-			payment_number,
+			reference,
 			amount,
 			TRIM(currency),
 			status,
 			created_at,
 			updated_at
 		FROM payments
-		WHERE payment_number = $1
+		WHERE reference = $1
 	`
 
 	var payment model.Payment
@@ -280,13 +280,42 @@ func (r *PostgresPaymentRepository) ApplyWebhookEvent(ctx context.Context, event
 			{AccountCode: "1010", EntryType: model.LedgerEntryTypeDebit, Amount: paymentAmount, Currency: paymentCurrency},
 			{AccountCode: "2010", EntryType: model.LedgerEntryTypeCredit, Amount: paymentAmount, Currency: paymentCurrency},
 		}
+		var debitTotal, creditTotal int64
 		for _, entry := range entries {
-			_, err = tx.Exec(ctx, `
-				INSERT INTO ledger_entries (payment_reference, account_code, entry_type, amount, currency)
-				VALUES ($1, $2, $3, $4, $5)
-			`, event.Reference, entry.AccountCode, entry.EntryType, entry.Amount, entry.Currency)
+			if entry.EntryType == model.LedgerEntryTypeDebit {
+				debitTotal += entry.Amount
+			} else if entry.EntryType == model.LedgerEntryTypeCredit {
+				creditTotal += entry.Amount
+			}
+		}
+		if debitTotal <= 0 || debitTotal != creditTotal {
+			return false, errors.New("ledger journal is not balanced")
+		}
+
+		result, err := tx.Exec(ctx, `
+			INSERT INTO payment_journals (payment_reference, currency, debit_total, credit_total)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (payment_reference) DO NOTHING
+		`, event.Reference, paymentCurrency, debitTotal, creditTotal)
+		if err != nil {
+			return false, err
+		}
+		if result.RowsAffected() == 1 {
+			var journalID int64
+			err = tx.QueryRow(ctx, `
+				SELECT id FROM payment_journals WHERE payment_reference = $1
+			`, event.Reference).Scan(&journalID)
 			if err != nil {
 				return false, err
+			}
+			for _, entry := range entries {
+				_, err = tx.Exec(ctx, `
+				INSERT INTO ledger_entries (journal_id, payment_reference, account_code, entry_type, amount, currency)
+				VALUES ($1, $2, $3, $4, $5, $6)
+			`, journalID, event.Reference, entry.AccountCode, entry.EntryType, entry.Amount, entry.Currency)
+				if err != nil {
+					return false, err
+				}
 			}
 		}
 	}

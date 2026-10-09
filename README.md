@@ -2,7 +2,9 @@
 
 REST API berbasis Go untuk demo integrasi pembayaran dan pemodelan domain keuangan. Kode saat ini menyediakan API payment, idempotency key, verifikasi signature webhook, transisi status, posting ledger debit/kredit, endpoint customer/account, static Swagger UI, serta simulasi in-memory retry queue.
 
-Customer/account API memakai tabel Neon melalui migration `007`. Payment GET telah disesuaikan untuk membaca skema Neon yang memakai UUID `id` dan kolom `payment_number` (dipetakan menjadi field API `reference`). Payment create, idempotency, webhook, dan ledger repository masih memakai kontrak migration legacy `001`-`004`; jangan menganggap operasi tulis tersebut kompatibel dengan schema Neon saat ini sebelum diselaraskan.
+Migration `008_payment_journals_and_reporting.sql` menambahkan journal payment yang seimbang dan immutable, serta laporan payment summary, daily payment, dan general ledger.
+
+Customer/account API memakai tabel melalui migration `007`. Payment management, webhook, dan ledger memakai kontrak payment legacy migrations `001`-`004`, dengan ID numerik `BIGSERIAL` dan kolom `reference`. Schema Neon yang memakai UUID `id`, `payment_number`, dan mewajibkan `customer_id` belum kompatibel dengan operasi payment ini; jalankan fitur pada database legacy yang sesuai atau buat migration rekonsiliasi sebelum deployment ke Neon.
 
 ## Masalah Bisnis
 
@@ -45,6 +47,8 @@ Kode dipisah ke `handler`, `service`, `repository`, `model`, `database`, `config
 Endpoint `POST /api/v1/webhooks/payment` memerlukan header `X-Webhook-Signature` dengan nilai `sha256=<hex HMAC-SHA256 dari raw request body menggunakan WEBHOOK_SECRET>`. Event yang didukung: `payment.success` dan `payment.failed`.
 
 Untuk `payment.success`, satu transaksi PostgreSQL memasukkan event webhook, mengubah status payment dari `PENDING`/`PROCESSING` ke `SUCCESS`, lalu mencatat satu debit dan satu kredit. Unique `event_id` mencegah event yang sama diproses ulang. Ledger ditulis hanya di repository dalam transaksi tersebut; service tidak melakukan posting kedua. Event berbeda untuk payment yang sudah terminal ditolak sebagai transisi status tidak valid.
+
+Setelah migration `008`, setiap payment hanya dapat memiliki satu journal. Header journal menyimpan total debit/kredit yang sama; deferred constraint trigger memastikan entry lengkap dan seimbang saat commit. Header dan entry yang sudah diposting tidak dapat diubah atau dihapus. Retry dengan event ID sama maupun event berbeda untuk payment sukses tidak membuat journal ganda.
 
 Contoh payload:
 
@@ -90,11 +94,19 @@ Response `201 Created`:
 
 ### Melihat semua payment
 
-`GET /api/v1/payments` membaca payment dari schema Neon aktif dan mengembalikan array. Jika belum ada transaksi, response berupa `[]`.
+`GET /api/v1/payments` mengembalikan array dari schema payment legacy. Jika belum ada transaksi, response berupa `[]`.
 
 ### Melihat payment berdasarkan ID
 
-`GET /api/v1/payments/{id}` menerima UUID Neon, mengembalikan satu payment, dan menghasilkan `404 Not Found` jika tidak ditemukan.
+`GET /api/v1/payments/{id}` menerima ID numerik `BIGSERIAL`, mengembalikan satu payment, dan menghasilkan `404 Not Found` jika tidak ditemukan.
+
+### Laporan keuangan
+
+- `GET /api/v1/reports/payment-summary?from=2026-10-01&to=2026-10-31` merangkum jumlah payment dan nominal per status serta mata uang.
+- `GET /api/v1/reports/daily-payments?from=2026-10-01&to=2026-10-31` mengelompokkan jumlah dan nominal payment per hari serta mata uang. Hari laporan menggunakan UTC.
+- `GET /api/v1/reports/general-ledger?from=2026-10-01&to=2026-10-31&account_code=1010` menampilkan debit, kredit, dan saldo berjalan per akun/mata uang.
+
+Parameter tanggal bersifat opsional dan memakai format `YYYY-MM-DD`; tanggal `to` termasuk seluruh harinya. Nominal dilaporkan terpisah per mata uang tanpa konversi kurs.
 
 ### Customer dan account
 
@@ -119,20 +131,17 @@ Setelah server berjalan, buka `http://localhost:8080/docs` atau `http://localhos
 
 ## Database
 
-Migration `001_create_payments.sql` sampai `004_create_idempotency_and_ledger.sql` mendefinisikan kontrak legacy: payment ID BIGINT dan kolom `reference`. Database Neon yang sedang digunakan memiliki payment ID UUID, kolom `payment_number`, serta kolom domain lain. Repository payment GET sudah memetakan kontrak Neon; payment create/idempotency/webhook/ledger belum sepenuhnya dimigrasikan.
+Migration SQL `001`-`007` adalah jalur schema legacy/eksperimental dan tidak boleh dijalankan pada database Laravel/Neon yang sudah memiliki tabel UUID. Migration `008_payment_journals_and_reporting.sql` bekerja secara aditif terhadap tabel Laravel yang sudah ada: `customers`, `payments`, `financial_transactions`, `chart_of_accounts`, dan `ledger_entries`. File ini juga menyiapkan fondasi RFQ, quotation, sales order, proforma invoice, sales invoice, pembayaran invoice, produk, gudang, reservasi stok, delivery order, stock movement, nomor dokumen, dan audit trail.
 
-Migration `007_create_customers_and_accounts.sql` membuat tabel `customers` dan `accounts` sesuai kontrak repository Go saat ini dan aman dijalankan setelah `001`-`004`. Migration `005_financial_domain_schema.sql` dan `006_full_financial_domain_schema.sql` adalah rancangan domain yang lebih luas, tetapi mendefinisikan ulang tabel yang sama dengan kolom/tipe berbeda (misalnya UUID payment ID dan struktur ledger berbeda). Jangan jalankan `005`/`006` sebagai rangkaian setelah `001`-`004` untuk deployment aktif sebelum dibuat migration rekonsiliasi.
+Untuk database Laravel yang sudah ada, jalankan migration Laravel aplikasi terlebih dahulu, lalu tinjau dan jalankan `008_payment_journals_and_reporting.sql`. `009_ledger_integrity_and_reporting.sql` bergantung pada kolom financial domain tersebut dan dijalankan setelah 008 bila belum diterapkan. Jangan jalankan migration `001`-`007` di database itu. Migration SQL ini tidak menggantikan migration PHP Laravel dan belum memiliki runner/ledger versi sendiri.
 
 ## Menjalankan
 
-Persyaratan: Go dan PostgreSQL. Atur `DATABASE_URL`, `APP_PORT` (opsional, default `8080`), dan `WEBHOOK_SECRET` (diperlukan untuk menerima webhook). Jalankan migration yang kompatibel secara berurutan:
+Persyaratan: Go dan PostgreSQL. Atur `DATABASE_URL`, `APP_PORT` (opsional, default `8080`), dan `WEBHOOK_SECRET` (diperlukan untuk menerima webhook). Database harus lebih dulu memiliki tabel Laravel UUID yang disebut di bagian Database. Setelah backup dan pemeriksaan environment, jalankan:
 
 ```sh
-psql "$DATABASE_URL" -f migrations/001_create_payments.sql
-psql "$DATABASE_URL" -f migrations/002_create_payment_indexes.sql
-psql "$DATABASE_URL" -f migrations/003_create_webhook_events.sql
-psql "$DATABASE_URL" -f migrations/004_create_idempotency_and_ledger.sql
-psql "$DATABASE_URL" -f migrations/007_create_customers_and_accounts.sql
+psql "$DATABASE_URL" -f migrations/008_payment_journals_and_reporting.sql
+psql "$DATABASE_URL" -f migrations/009_ledger_integrity_and_reporting.sql
 ```
 
 Jalankan API dan test:
@@ -160,7 +169,7 @@ Contoh signature webhook dapat dibuat dengan HMAC-SHA256 atas bytes body persis 
 - Belum ada integrasi provider pembayaran nyata; webhook demo adalah pemicu perubahan status.
 - Idempotency key disimpan atomik bersama payment dan menolak pemakaian ulang, tetapi belum menyimpan dan me-replay hasil request sebelumnya.
 - Retry queue adalah utilitas in-memory, belum dihubungkan ke pemrosesan webhook dan hilang saat proses berhenti.
-- Posting ledger memakai dua kode akun demo tetap; belum ada konfigurasi chart of accounts atau validasi saldo lintas mata uang.
+- Posting ledger memakai dua kode akun demo tetap dan tidak mengonversi mata uang.
 - Domain finansial lengkap pada migration `005`/`006` masih perlu direkonsiliasi dengan skema payment aktif.
 - Gunakan hanya untuk demo/pembelajaran, bukan pemrosesan uang produksi.
 

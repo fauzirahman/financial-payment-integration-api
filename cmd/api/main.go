@@ -79,6 +79,9 @@ func main() {
 	customerHandler := handler.NewCustomerHandler(customerService)
 	accountHandler := handler.NewAccountHandler(accountService)
 	webhookHandler := handler.NewWebhookHandler(paymentService, cfg.WebhookSecret)
+	reportingRepository := repository.NewPostgresReportingRepository(db)
+	reportingService := service.NewReportingService(reportingRepository)
+	reportingHandler := handler.NewReportingHandler(reportingService)
 
 	http.HandleFunc("/health", healthHandler)
 	http.Handle("/swagger/", http.StripPrefix("/swagger/", http.FileServer(http.FS(swaggerdocs.Files))))
@@ -129,6 +132,7 @@ func main() {
 
 	http.HandleFunc("/api/v1/payments/", paymentHandler.GetPaymentByID)
 	http.HandleFunc("/api/v1/webhooks/payment", webhookHandler.HandlePaymentWebhook)
+	http.Handle("/api/v1/reports/", reportingHandler)
 
 	fmt.Println("Financial Payment Integration API")
 	fmt.Printf("Server listening on port %s\n", cfg.AppPort)
