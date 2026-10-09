@@ -283,7 +283,8 @@
         "summary": "Payment summary by currency and status",
         "parameters": [
           { "in": "query", "name": "from", "schema": { "type": "string", "format": "date" } },
-          { "in": "query", "name": "to", "schema": { "type": "string", "format": "date" } }
+          { "in": "query", "name": "to", "schema": { "type": "string", "format": "date" } },
+          { "in": "query", "name": "format", "schema": { "type": "string", "enum": ["json", "csv", "xlsx", "excel", "pdf"], "default": "json" } }
         ],
         "responses": { "200": { "description": "Payment totals grouped by currency" }, "400": { "description": "Invalid date range" } }
       }
@@ -293,7 +294,8 @@
         "summary": "Daily payment report by currency",
         "parameters": [
           { "in": "query", "name": "from", "schema": { "type": "string", "format": "date" } },
-          { "in": "query", "name": "to", "schema": { "type": "string", "format": "date" } }
+          { "in": "query", "name": "to", "schema": { "type": "string", "format": "date" } },
+          { "in": "query", "name": "format", "schema": { "type": "string", "enum": ["json", "csv", "xlsx", "excel", "pdf"], "default": "json" } }
         ],
         "responses": { "200": { "description": "Daily payment totals" }, "400": { "description": "Invalid date range" } }
       }
@@ -304,7 +306,8 @@
         "parameters": [
           { "in": "query", "name": "from", "schema": { "type": "string", "format": "date" } },
           { "in": "query", "name": "to", "schema": { "type": "string", "format": "date" } },
-          { "in": "query", "name": "account_code", "schema": { "type": "string" } }
+          { "in": "query", "name": "account_code", "schema": { "type": "string" } },
+          { "in": "query", "name": "format", "schema": { "type": "string", "enum": ["json", "csv", "xlsx", "excel", "pdf"], "default": "json" } }
         ],
         "responses": { "200": { "description": "Posted ledger entries" }, "400": { "description": "Invalid date range" } }
       }

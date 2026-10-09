@@ -106,6 +106,14 @@ Response `201 Created`:
 - `GET /api/v1/reports/daily-payments?from=2026-10-01&to=2026-10-31` mengelompokkan jumlah dan nominal payment per hari serta mata uang. Hari laporan menggunakan UTC.
 - `GET /api/v1/reports/general-ledger?from=2026-10-01&to=2026-10-31&account_code=1010` menampilkan debit, kredit, dan saldo berjalan per akun/mata uang.
 
+Semua endpoint menerima `format=csv`, `format=xlsx` (atau `format=excel`), atau `format=pdf` untuk mengunduh laporan. Tanpa parameter format, response tetap JSON. Nama file dikirim melalui `Content-Disposition`.
+
+```sh
+curl -OJ 'http://localhost:8080/api/v1/reports/payment-summary?from=2026-10-01&to=2026-10-31&format=xlsx'
+curl -OJ 'http://localhost:8080/api/v1/reports/daily-payments?from=2026-10-01&to=2026-10-31&format=csv'
+curl -OJ 'http://localhost:8080/api/v1/reports/general-ledger?from=2026-10-01&to=2026-10-31&account_code=1010&format=pdf'
+```
+
 Parameter tanggal bersifat opsional dan memakai format `YYYY-MM-DD`; tanggal `to` termasuk seluruh harinya. Nominal dilaporkan terpisah per mata uang tanpa konversi kurs.
 
 ### Customer dan account
