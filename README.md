@@ -1,8 +1,8 @@
 # Financial Payment Integration API - Go
 
-REST API berbasis Go untuk demo integrasi pembayaran dan pemodelan domain keuangan. Kode saat ini menyediakan API payment, idempotency key, verifikasi signature webhook, transisi status, posting ledger debit/kredit, endpoint customer/account, static Swagger UI, serta simulasi in-memory retry queue.
+REST API berbasis Go untuk demo B2B sales dan order management terintegrasi dengan inventory serta payment/finance. Kode menyediakan master customer, product, dan warehouse; pembuatan dan konfirmasi sales order; reservasi stok; delivery; pencatatan movement dan activity; serta payment, webhook, dan reporting.
 
-Migration `008_payment_journals_and_reporting.sql` menambahkan journal payment yang seimbang dan immutable, serta laporan payment summary, daily payment, dan general ledger.
+Migration `010_payment_journals_legacy.sql` menyiapkan indeks laporan untuk schema ledger UUID dari migration `006`. Nama file dipertahankan agar deployment yang sudah memakai instruksi sebelumnya tetap mudah diperbarui; migration ini tidak membuat journal legacy.
 
 Customer/account API memakai tabel melalui migration `007`. Payment management, webhook, dan ledger memakai kontrak payment legacy migrations `001`-`004`, dengan ID numerik `BIGSERIAL` dan kolom `reference`. Schema Neon yang memakai UUID `id`, `payment_number`, dan mewajibkan `customer_id` belum kompatibel dengan operasi payment ini; jalankan fitur pada database legacy yang sesuai atau buat migration rekonsiliasi sebelum deployment ke Neon.
 
@@ -48,7 +48,7 @@ Endpoint `POST /api/v1/webhooks/payment` memerlukan header `X-Webhook-Signature`
 
 Untuk `payment.success`, satu transaksi PostgreSQL memasukkan event webhook, mengubah status payment dari `PENDING`/`PROCESSING` ke `SUCCESS`, lalu mencatat satu debit dan satu kredit. Unique `event_id` mencegah event yang sama diproses ulang. Ledger ditulis hanya di repository dalam transaksi tersebut; service tidak melakukan posting kedua. Event berbeda untuk payment yang sudah terminal ditolak sebagai transisi status tidak valid.
 
-Setelah migration `008`, setiap payment hanya dapat memiliki satu journal. Header journal menyimpan total debit/kredit yang sama; deferred constraint trigger memastikan entry lengkap dan seimbang saat commit. Header dan entry yang sudah diposting tidak dapat diubah atau dihapus. Retry dengan event ID sama maupun event berbeda untuk payment sukses tidak membuat journal ganda.
+Webhook dan payment repository masih memakai kontrak payment legacy. Laporan general ledger membaca debit/kredit langsung dari `ledger_entries`, dengan relasi ke transaksi keuangan dan chart of accounts.
 
 Contoh payload:
 
@@ -116,6 +116,41 @@ curl -OJ 'http://localhost:8080/api/v1/reports/general-ledger?from=2026-10-01&to
 
 Parameter tanggal bersifat opsional dan memakai format `YYYY-MM-DD`; tanggal `to` termasuk seluruh harinya. Nominal dilaporkan terpisah per mata uang tanpa konversi kurs.
 
+### Sales order dan inventory
+
+Alur order: buat customer, product, dan warehouse; catat penerimaan stok; buat order draft; konfirmasi untuk reservasi stok; lalu proses delivery. Nomor order dan delivery dibuat database, sementara setiap perubahan status dan pergerakan stok dicatat sebagai activity atau inventory movement.
+
+- `GET/POST /api/v1/products` untuk melihat dan membuat product.
+- `GET/POST /api/v1/warehouses` untuk melihat dan membuat warehouse.
+- `GET /api/v1/inventory` untuk melihat stok on-hand, reserved, dan available per product/warehouse.
+- `GET /api/v1/inventory/movements?product_id={uuid}&warehouse_id={uuid}&limit=50` untuk audit penerimaan, adjustment, dan delivery; filter bersifat opsional, limit 1-200.
+- `POST /api/v1/inventory/movements?type=RECEIPT` untuk menerima stok; gunakan `type=ADJUSTMENT` untuk koreksi positif atau negatif. Body berisi `product_id`, `warehouse_id`, `quantity_delta`, dan `reason`.
+- `GET/POST /api/v1/sales-orders` untuk daftar dan membuat order. Total subtotal, tax, dan total dihitung server dari item.
+- `GET /api/v1/sales-orders/{id}` untuk detail order beserta item.
+- `GET /api/v1/sales-orders/{id}/activity` untuk melihat perubahan status dan aktivitas yang tercatat.
+- `GET /api/v1/sales-orders/{id}/deliveries` untuk melihat dokumen delivery beserta item yang dikirim.
+- `POST /api/v1/sales-orders/{id}/confirm` dengan `warehouse_id` untuk mengonfirmasi order dan mereservasi stok secara atomik.
+- `POST /api/v1/sales-orders/{id}/deliver` dengan `warehouse_id` untuk membuat delivery order, mengurangi stok, menyelesaikan reservasi, dan mengubah status order menjadi `DELIVERED` dalam satu transaksi.
+
+Contoh urutan request:
+
+```sh
+curl -X POST http://localhost:8080/api/v1/products -H 'Content-Type: application/json' \
+	-d '{"sku":"PUMP-001","name":"Industrial Pump","unit":"UNIT"}'
+curl -X POST http://localhost:8080/api/v1/warehouses -H 'Content-Type: application/json' \
+	-d '{"code":"WH-JKT","name":"Jakarta Warehouse"}'
+curl -X POST 'http://localhost:8080/api/v1/inventory/movements?type=RECEIPT' -H 'Content-Type: application/json' \
+	-d '{"product_id":"<product-uuid>","warehouse_id":"<warehouse-uuid>","quantity_delta":25,"reason":"Opening stock"}'
+curl -X POST http://localhost:8080/api/v1/sales-orders -H 'Content-Type: application/json' \
+	-d '{"customer_id":"<customer-uuid>","currency":"IDR","items":[{"product_id":"<product-uuid>","description":"Industrial Pump","quantity":2,"unit":"UNIT","unit_price":1250000,"tax_rate":11}]}'
+curl -X POST http://localhost:8080/api/v1/sales-orders/<order-uuid>/confirm -H 'Content-Type: application/json' \
+	-d '{"warehouse_id":"<warehouse-uuid>"}'
+curl -X POST http://localhost:8080/api/v1/sales-orders/<order-uuid>/deliver -H 'Content-Type: application/json' \
+	-d '{"warehouse_id":"<warehouse-uuid>"}'
+```
+
+Konfirmasi gagal dengan `409 Conflict` jika stok tidak cukup atau status order bukan `DRAFT`. Endpoint sales/inventory memakai schema UUID dari migration `008`; konversi quotation, invoice issuance, dan alokasi payment belum termasuk dalam alur ini.
+
 ### Customer dan account
 
 - `GET /api/v1/customers` dan `POST /api/v1/customers`
@@ -139,18 +174,21 @@ Setelah server berjalan, buka `http://localhost:8080/docs` atau `http://localhos
 
 ## Database
 
-Migration SQL `001`-`007` adalah jalur schema legacy/eksperimental dan tidak boleh dijalankan pada database Laravel/Neon yang sudah memiliki tabel UUID. Migration `008_payment_journals_and_reporting.sql` bekerja secara aditif terhadap tabel Laravel yang sudah ada: `customers`, `payments`, `financial_transactions`, `chart_of_accounts`, dan `ledger_entries`. File ini juga menyiapkan fondasi RFQ, quotation, sales order, proforma invoice, sales invoice, pembayaran invoice, produk, gudang, reservasi stok, delivery order, stock movement, nomor dokumen, dan audit trail.
+Migration SQL `001`-`007` adalah jalur schema legacy/eksperimental dan mungkin tidak cocok dengan database Laravel/Neon yang sudah memiliki tabel UUID. Migration `010_payment_journals_legacy.sql` menyiapkan indeks laporan untuk ledger UUID yang memiliki `financial_transaction_id`, `chart_of_account_id`, `debit`, `credit`, dan `currency`.
 
-Untuk database Laravel yang sudah ada, jalankan migration Laravel aplikasi terlebih dahulu, lalu tinjau dan jalankan `008_payment_journals_and_reporting.sql`. `009_ledger_integrity_and_reporting.sql` bergantung pada kolom financial domain tersebut dan dijalankan setelah 008 bila belum diterapkan. Jangan jalankan migration `001`-`007` di database itu. Migration SQL ini tidak menggantikan migration PHP Laravel dan belum memiliki runner/ledger versi sendiri.
+Migration `008_payment_journals_and_reporting.sql` bekerja secara aditif terhadap tabel Laravel yang sudah ada: `customers`, `payments`, `financial_transactions`, `chart_of_accounts`, dan `ledger_entries`. File ini juga menyiapkan fondasi RFQ, quotation, sales order, proforma invoice, sales invoice, pembayaran invoice, produk, gudang, reservasi stok, delivery order, stock movement, nomor dokumen, dan audit trail.
+
+Untuk database dengan schema dari migration `006`, jalankan `010_payment_journals_legacy.sql` setelah migration schema tersebut. Jangan jalankan migration ini pada schema legacy `001`-`004`. Untuk database Laravel yang sudah ada, tinjau kecocokan semua migration dan kolomnya terlebih dahulu; migration SQL ini tidak menggantikan migration PHP Laravel dan belum memiliki runner/ledger versi sendiri.
 
 ## Menjalankan
 
-Persyaratan: Go dan PostgreSQL. Atur `DATABASE_URL`, `APP_PORT` (opsional, default `8080`), dan `WEBHOOK_SECRET` (diperlukan untuk menerima webhook). Database harus lebih dulu memiliki tabel Laravel UUID yang disebut di bagian Database. Setelah backup dan pemeriksaan environment, jalankan:
+Persyaratan: Go dan PostgreSQL. Atur `DATABASE_URL`, `APP_PORT` (opsional, default `8080`), dan `WEBHOOK_SECRET` (diperlukan untuk menerima webhook). Schema database harus sesuai dengan migration domain yang digunakan API. Untuk schema financial UUID berdasarkan migration `006`, jalankan:
 
 ```sh
-psql "$DATABASE_URL" -f migrations/008_payment_journals_and_reporting.sql
-psql "$DATABASE_URL" -f migrations/009_ledger_integrity_and_reporting.sql
+psql "$DATABASE_URL" -f migrations/010_payment_journals_legacy.sql
 ```
+
+Migration `010` menambahkan indeks yang dipakai query general ledger UUID. Payment repository dan webhook masih memakai schema legacy; operasi tersebut tetap memerlukan rekonsiliasi sebelum digunakan terhadap database UUID.
 
 Jalankan API dan test:
 

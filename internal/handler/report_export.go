@@ -77,18 +77,18 @@ func buildReportTable(result any) (reportTable, error) {
 		return table, nil
 	case []model.GeneralLedgerEntry:
 		table := reportTable{
-			Headers:        []string{"Journal ID", "Payment Reference", "Account Code", "Entry Type", "Debit", "Credit", "Running Balance", "Currency", "Posted At"},
-			NumericColumns: []int{0, 4, 5, 6},
+			Headers:        []string{"Financial Transaction ID", "Payment Number", "Account Code", "Entry Type", "Debit", "Credit", "Running Balance", "Currency", "Posted At"},
+			NumericColumns: []int{4, 5, 6},
 		}
 		for _, row := range rows {
 			table.Rows = append(table.Rows, []string{
-				strconv.FormatInt(row.JournalID, 10),
-				row.PaymentReference,
+				row.FinancialTransactionID,
+				row.PaymentNumber,
 				row.AccountCode,
 				row.EntryType,
-				strconv.FormatInt(row.DebitAmount, 10),
-				strconv.FormatInt(row.CreditAmount, 10),
-				strconv.FormatInt(row.RunningBalance, 10),
+				strconv.FormatFloat(row.DebitAmount, 'f', -1, 64),
+				strconv.FormatFloat(row.CreditAmount, 'f', -1, 64),
+				strconv.FormatFloat(row.RunningBalance, 'f', -1, 64),
 				row.Currency,
 				row.PostedAt.Format(time.RFC3339),
 			})
@@ -150,7 +150,7 @@ func renderXLSX(table reportTable) ([]byte, error) {
 			}
 			var setErr error
 			if isNumericReportColumn(columnIndex, table.NumericColumns) {
-				number, parseErr := strconv.ParseInt(value, 10, 64)
+				number, parseErr := strconv.ParseFloat(value, 64)
 				if parseErr != nil {
 					return nil, parseErr
 				}

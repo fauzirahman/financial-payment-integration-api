@@ -112,27 +112,30 @@ func (r *PostgresReportingRepository) GeneralLedgerReport(ctx context.Context, f
 	rows, err := r.db.Query(ctx, `
 		WITH ledger_balances AS (
 		SELECT
-			journal.id,
-			journal.payment_reference,
-			entry.account_code,
-			entry.entry_type,
-			CASE WHEN entry.entry_type = 'DEBIT' THEN entry.amount ELSE 0 END,
-			CASE WHEN entry.entry_type = 'CREDIT' THEN entry.amount ELSE 0 END,
-			SUM(CASE WHEN entry.entry_type = 'DEBIT' THEN entry.amount ELSE -entry.amount END)
+			ft.id::text AS financial_transaction_id,
+			ft.reference AS payment_number,
+			chart.code AS account_code,
+			CASE WHEN entry.debit > 0 THEN 'DEBIT' ELSE 'CREDIT' END AS entry_type,
+			entry.debit AS debit_amount,
+			entry.credit AS credit_amount,
+			SUM(entry.debit - entry.credit)
 				OVER (
-					PARTITION BY entry.currency, entry.account_code
-					ORDER BY journal.posted_at, journal.id, entry.id
+					PARTITION BY entry.currency, chart.code
+					ORDER BY entry.created_at, ft.id, entry.id
 					ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 				) AS running_balance,
 			TRIM(entry.currency) AS currency,
-			journal.posted_at,
+			entry.created_at AS posted_at,
 			entry.id AS ledger_entry_id
-		FROM payment_journals AS journal
-		JOIN ledger_entries AS entry ON entry.journal_id = journal.id
+		FROM ledger_entries AS entry
+		JOIN financial_transactions AS ft
+			ON ft.id = entry.financial_transaction_id
+		JOIN chart_of_accounts AS chart
+			ON chart.id = entry.chart_of_account_id
 		)
 		SELECT
-			id,
-			payment_reference,
+			financial_transaction_id,
+			payment_number,
 			account_code,
 			entry_type,
 			debit_amount,
@@ -141,10 +144,10 @@ func (r *PostgresReportingRepository) GeneralLedgerReport(ctx context.Context, f
 			currency,
 			posted_at
 		FROM ledger_balances
-		WHERE ($1::timestamptz IS NULL OR posted_at >= $1)
-		  AND ($2::timestamptz IS NULL OR posted_at < $2)
+		WHERE ($1::timestamp IS NULL OR posted_at >= $1::timestamp)
+		  AND ($2::timestamp IS NULL OR posted_at < $2::timestamp)
 		  AND ($3 = '' OR account_code = $3)
-		ORDER BY posted_at, id, ledger_entry_id
+		ORDER BY posted_at, financial_transaction_id, ledger_entry_id
 	`, filter.From, filter.ToExclusive, filter.AccountCode)
 	if err != nil {
 		return nil, err
@@ -155,8 +158,8 @@ func (r *PostgresReportingRepository) GeneralLedgerReport(ctx context.Context, f
 	for rows.Next() {
 		var entry model.GeneralLedgerEntry
 		if err := rows.Scan(
-			&entry.JournalID,
-			&entry.PaymentReference,
+			&entry.FinancialTransactionID,
+			&entry.PaymentNumber,
 			&entry.AccountCode,
 			&entry.EntryType,
 			&entry.DebitAmount,

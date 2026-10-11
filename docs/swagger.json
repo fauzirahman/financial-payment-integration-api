@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Financial Payment Integration API",
+    "title": "B2B Sales and Order Management API",
     "version": "1.0.0",
-    "description": "Demo backend for payment, idempotency, webhook, retry, and ledger workflows."
+    "description": "B2B sales orders, inventory, delivery, payment, and finance reporting workflows."
   },
   "servers": [
     { "url": "/" }
@@ -259,6 +259,196 @@
           "400": { "description": "Invalid UUID" },
           "404": { "description": "Account not found" }
         }
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "summary": "List products",
+        "responses": { "200": { "description": "Product catalog" } }
+      },
+      "post": {
+        "summary": "Create product",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["sku", "name", "unit"],
+                "properties": {
+                  "sku": { "type": "string", "maxLength": 60 },
+                  "name": { "type": "string", "maxLength": 200 },
+                  "description": { "type": "string" },
+                  "unit": { "type": "string", "maxLength": 20 }
+                }
+              },
+              "example": { "sku": "PUMP-001", "name": "Industrial Pump", "unit": "UNIT" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Product created" }, "400": { "description": "Invalid product" } }
+      }
+    },
+    "/api/v1/warehouses": {
+      "get": {
+        "summary": "List warehouses",
+        "responses": { "200": { "description": "Warehouse list" } }
+      },
+      "post": {
+        "summary": "Create warehouse",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code", "name"],
+                "properties": {
+                  "code": { "type": "string", "maxLength": 30 },
+                  "name": { "type": "string", "maxLength": 150 },
+                  "address": { "type": "object" }
+                }
+              },
+              "example": { "code": "WH-JKT", "name": "Jakarta Warehouse" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Warehouse created" }, "400": { "description": "Invalid warehouse" } }
+      }
+    },
+    "/api/v1/inventory": {
+      "get": {
+        "summary": "List stock by product and warehouse",
+        "responses": { "200": { "description": "On-hand, reserved, and available stock" } }
+      }
+    },
+    "/api/v1/inventory/movements": {
+      "get": {
+        "summary": "List inventory movement history",
+        "parameters": [
+          { "in": "query", "name": "product_id", "schema": { "type": "string", "format": "uuid" } },
+          { "in": "query", "name": "warehouse_id", "schema": { "type": "string", "format": "uuid" } },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 } }
+        ],
+        "responses": { "200": { "description": "Immutable stock movement history" }, "400": { "description": "Invalid filters" } }
+      },
+      "post": {
+        "summary": "Record stock receipt or adjustment",
+        "parameters": [
+          { "in": "query", "name": "type", "required": true, "schema": { "type": "string", "enum": ["RECEIPT", "ADJUSTMENT"] } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["product_id", "warehouse_id", "quantity_delta", "reason"],
+                "properties": {
+                  "product_id": { "type": "string", "format": "uuid" },
+                  "warehouse_id": { "type": "string", "format": "uuid" },
+                  "quantity_delta": { "type": "number", "not": { "const": 0 } },
+                  "reason": { "type": "string" }
+                }
+              },
+              "example": { "product_id": "550e8400-e29b-41d4-a716-446655440001", "warehouse_id": "660e8400-e29b-41d4-a716-446655440000", "quantity_delta": 25, "reason": "Opening stock" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Stock movement recorded" }, "409": { "description": "Adjustment would make stock negative" } }
+      }
+    },
+    "/api/v1/sales-orders": {
+      "get": {
+        "summary": "List sales orders",
+        "responses": { "200": { "description": "Sales order list" } }
+      },
+      "post": {
+        "summary": "Create draft sales order",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["customer_id", "currency", "items"],
+                "properties": {
+                  "customer_id": { "type": "string", "format": "uuid" },
+                  "currency": { "type": "string", "pattern": "^[A-Za-z]{3}$" },
+                  "payment_terms": { "type": "string" },
+                  "delivery_address": { "type": "object" },
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "required": ["product_id", "description", "quantity", "unit", "unit_price"],
+                      "properties": {
+                        "product_id": { "type": "string", "format": "uuid" },
+                        "sku": { "type": "string" },
+                        "description": { "type": "string" },
+                        "quantity": { "type": "number", "exclusiveMinimum": 0 },
+                        "unit": { "type": "string" },
+                        "unit_price": { "type": "number", "minimum": 0 },
+                        "tax_rate": { "type": "number", "minimum": 0, "maximum": 100 }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+                "currency": "IDR",
+                "items": [{ "product_id": "550e8400-e29b-41d4-a716-446655440001", "description": "Industrial Pump", "quantity": 2, "unit": "UNIT", "unit_price": 1250000, "tax_rate": 11 }]
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Draft order created with server-calculated totals" }, "400": { "description": "Invalid order" } }
+      }
+    },
+    "/api/v1/sales-orders/{id}": {
+      "get": {
+        "summary": "Get sales order details",
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Order and line items" }, "404": { "description": "Order not found" } }
+      }
+    },
+    "/api/v1/sales-orders/{id}/activity": {
+      "get": {
+        "summary": "List sales order activity history",
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Status and activity audit log" }, "404": { "description": "Order not found" } }
+      }
+    },
+    "/api/v1/sales-orders/{id}/deliveries": {
+      "get": {
+        "summary": "List delivery documents for sales order",
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": { "200": { "description": "Delivery documents with shipped items" }, "404": { "description": "Order not found" } }
+      }
+    },
+    "/api/v1/sales-orders/{id}/confirm": {
+      "post": {
+        "summary": "Confirm order and reserve inventory",
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["warehouse_id"], "properties": { "warehouse_id": { "type": "string", "format": "uuid" } } } } }
+        },
+        "responses": { "200": { "description": "Order confirmed" }, "409": { "description": "Insufficient stock or invalid order state" } }
+      }
+    },
+    "/api/v1/sales-orders/{id}/deliver": {
+      "post": {
+        "summary": "Process full delivery and deduct stock",
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["warehouse_id"], "properties": { "warehouse_id": { "type": "string", "format": "uuid" } } } } }
+        },
+        "responses": { "201": { "description": "Delivery document created and stock deducted" }, "409": { "description": "Order is not confirmed" } }
       }
     },
     "/api/v1/payments/{id}": {

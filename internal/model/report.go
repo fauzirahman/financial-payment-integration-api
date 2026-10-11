@@ -23,13 +23,13 @@ type DailyPaymentReport struct {
 }
 
 type GeneralLedgerEntry struct {
-	JournalID        int64     `json:"journal_id"`
-	PaymentReference string    `json:"payment_reference"`
-	AccountCode      string    `json:"account_code"`
-	EntryType        string    `json:"entry_type"`
-	DebitAmount      int64     `json:"debit_amount"`
-	CreditAmount     int64     `json:"credit_amount"`
-	RunningBalance   int64     `json:"running_balance"`
-	Currency         string    `json:"currency"`
-	PostedAt         time.Time `json:"posted_at"`
+	FinancialTransactionID string    `json:"financial_transaction_id"`
+	PaymentNumber          string    `json:"payment_number"`
+	AccountCode            string    `json:"account_code"`
+	EntryType              string    `json:"entry_type"`
+	DebitAmount            float64   `json:"debit_amount"`
+	CreditAmount           float64   `json:"credit_amount"`
+	RunningBalance         float64   `json:"running_balance"`
+	Currency               string    `json:"currency"`
+	PostedAt               time.Time `json:"posted_at"`
 }

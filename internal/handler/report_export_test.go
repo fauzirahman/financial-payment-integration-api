@@ -27,7 +27,7 @@ func (reportExportRepositoryStub) DailyPaymentReport(context.Context, repository
 }
 
 func (reportExportRepositoryStub) GeneralLedgerReport(context.Context, repository.ReportFilter) ([]model.GeneralLedgerEntry, error) {
-	return []model.GeneralLedgerEntry{{JournalID: 1, PaymentReference: "PAY-001", AccountCode: "1010", EntryType: "DEBIT", DebitAmount: 125000, Currency: "IDR", PostedAt: time.Date(2026, 10, 9, 10, 0, 0, 0, time.UTC)}}, nil
+	return []model.GeneralLedgerEntry{{FinancialTransactionID: "00000000-0000-0000-0000-000000000001", PaymentNumber: "PAY-001", AccountCode: "1010", EntryType: "DEBIT", DebitAmount: 125000, Currency: "IDR", PostedAt: time.Date(2026, 10, 9, 10, 0, 0, 0, time.UTC)}}, nil
 }
 
 func TestReportExportsReturnDownloadableFiles(t *testing.T) {
