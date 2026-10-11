@@ -36,7 +36,7 @@ func (r *PostgresPaymentRepository) FindAll(ctx context.Context) ([]model.Paymen
 	query := `
 		SELECT
 			id::text,
-			reference,
+			payment_number,
 			amount,
 			TRIM(currency),
 			status,
