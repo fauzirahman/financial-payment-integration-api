@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -10,6 +12,7 @@ type Config struct {
 	AppPort       string
 	DatabaseURL   string
 	WebhookSecret string
+	AuthTokenSecret string
 }
 
 func Load() (*Config, error) {
@@ -28,10 +31,15 @@ func Load() (*Config, error) {
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	webhookSecret := os.Getenv("WEBHOOK_SECRET")
+	authTokenSecret := os.Getenv("AUTH_TOKEN_SECRET")
+	if len(strings.TrimSpace(authTokenSecret)) < 32 {
+		return nil, fmt.Errorf("AUTH_TOKEN_SECRET must be set and contain at least 32 characters")
+	}
 
 	return &Config{
-		AppPort:       appPort,
-		DatabaseURL:   databaseURL,
-		WebhookSecret: webhookSecret,
+		AppPort:         appPort,
+		DatabaseURL:     databaseURL,
+		WebhookSecret:   webhookSecret,
+		AuthTokenSecret: authTokenSecret,
 	}, nil
 }

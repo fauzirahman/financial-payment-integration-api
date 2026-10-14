@@ -42,6 +42,26 @@ flowchart TB
 
 Kode dipisah ke `handler`, `service`, `repository`, `model`, `database`, `config`, dan `queue`. Endpoint health check tersedia di `/health`. Retry queue bersifat in-memory dan belum dijalankan oleh server API.
 
+## Authentication
+
+Jalankan migration `011_create_users.sql` untuk membuat tabel user. Set `AUTH_TOKEN_SECRET` ke secret acak minimal 32 karakter; aplikasi menolak start jika secret tidak tersedia atau terlalu pendek. Password disimpan sebagai hash bcrypt, dan token bearer HMAC-SHA256 berlaku selama satu jam.
+
+- `POST /api/v1/auth/register` menerima `name`, `email`, dan `password` (minimal 8 karakter). Email yang sudah terdaftar menghasilkan `409 Conflict`.
+- `POST /api/v1/auth/login` menerima `email` dan `password`; kredensial salah menghasilkan `401 Unauthorized`.
+- Request ke endpoint API bisnis memerlukan header `Authorization: Bearer <access_token>`. `/health`, dokumentasi Swagger, endpoint auth, dan webhook payment tetap publik.
+
+Contoh:
+
+```sh
+curl -X POST http://localhost:8080/api/v1/auth/register \
+	-H 'Content-Type: application/json' \
+	-d '{"name":"Demo User","email":"demo@example.com","password":"change-this-password"}'
+curl http://localhost:8080/api/v1/customers \
+	-H 'Authorization: Bearer <access_token>'
+```
+
+Authentication ini mengidentifikasi pengguna dan mengamankan akses dengan token; otorisasi berbasis role dan relasi kepemilikan data belum diterapkan.
+
 ## Webhook dan Ledger
 
 Endpoint `POST /api/v1/webhooks/payment` memerlukan header `X-Webhook-Signature` dengan nilai `sha256=<hex HMAC-SHA256 dari raw request body menggunakan WEBHOOK_SECRET>`. Event yang didukung: `payment.success` dan `payment.failed`.

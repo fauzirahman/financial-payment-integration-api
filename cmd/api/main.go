@@ -85,6 +85,13 @@ func main() {
 	reportingRepository := repository.NewPostgresReportingRepository(db)
 	reportingService := service.NewReportingService(reportingRepository)
 	reportingHandler := handler.NewReportingHandler(reportingService)
+	userRepository := repository.NewPostgresUserRepository(db)
+	authService := service.NewAuthService(userRepository)
+	tokenManager := service.NewTokenManager(cfg.AuthTokenSecret, time.Hour)
+	authHandler := handler.NewAuthHandler(authService, tokenManager)
+
+	http.HandleFunc("/api/v1/auth/register", authHandler.Register)
+	http.HandleFunc("/api/v1/auth/login", authHandler.Login)
 
 	http.HandleFunc("/health", healthHandler)
 	http.Handle("/swagger/", http.StripPrefix("/swagger/", http.FileServer(http.FS(swaggerdocs.Files))))
@@ -148,7 +155,7 @@ func main() {
 	fmt.Println("Financial Payment Integration API")
 	fmt.Printf("Server listening on port %s\n", cfg.AppPort)
 
-	err = http.ListenAndServe(":"+cfg.AppPort, nil)
+	err = http.ListenAndServe(":"+cfg.AppPort, handler.AuthenticationMiddleware(tokenManager, http.DefaultServeMux))
 	if err != nil {
 		fmt.Println("Server error:", err)
 	}
