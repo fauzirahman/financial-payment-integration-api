@@ -8,12 +8,107 @@
   "servers": [
     { "url": "/" }
   ],
+  "security": [
+    { "BearerAuth": [] }
+  ],
   "paths": {
     "/health": {
       "get": {
         "summary": "Health check",
+        "security": [],
         "responses": {
           "200": { "description": "OK" }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "summary": "Register a user",
+        "description": "Creates a user and returns a bearer access token. Requires the users database migration.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" },
+              "example": {
+                "name": "Demo User",
+                "email": "demo@example.com",
+                "password": "change-this-password"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered; access token returned",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, email, or password",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            "description": "Email already registered",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "Log in",
+        "description": "Authenticates a user and returns a bearer access token.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" },
+              "example": {
+                "email": "demo-login-27cf3c2257@example.com",
+                "password": "fJ3scTksNIAC9A44ObMm4Nx3NLM"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful; access token returned",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid email or password",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
         }
       }
     },
@@ -505,6 +600,7 @@
     "/api/v1/webhooks/payment": {
       "post": {
         "summary": "Payment webhook receiver",
+        "security": [],
         "parameters": [
           {
             "in": "header",
@@ -539,6 +635,61 @@
           "200": { "description": "OK" },
           "401": { "description": "Unauthorized" }
         }
+      }
+    }
+  },
+  "components": {
+      "securitySchemes": {
+        "BearerAuth": {
+          "type": "http",
+          "scheme": "bearer",
+          "bearerFormat": "JWT",
+          "description": "Enter the access_token returned by register or login."
+        }
+      },
+      "schemas": {
+        "RegisterRequest": {
+          "type": "object",
+          "required": ["name", "email", "password"],
+          "properties": {
+            "name": { "type": "string", "maxLength": 150, "example": "Demo User" },
+            "email": { "type": "string", "format": "email", "maxLength": 254, "example": "demo@example.com" },
+            "password": { "type": "string", "format": "password", "minLength": 8, "maxLength": 72, "example": "change-this-password" }
+          }
+        },
+        "LoginRequest": {
+          "type": "object",
+          "required": ["email", "password"],
+          "properties": {
+            "email": { "type": "string", "format": "email", "example": "demo@example.com" },
+            "password": { "type": "string", "format": "password", "example": "change-this-password" }
+          }
+        },
+        "AuthResponse": {
+          "type": "object",
+          "required": ["user", "access_token", "token_type", "expires_in"],
+          "properties": {
+            "user": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "example": "user-uuid" },
+                "name": { "type": "string", "example": "Demo User" },
+                "email": { "type": "string", "format": "email", "example": "demo@example.com" },
+                "created_at": { "type": "string", "format": "date-time" },
+                "updated_at": { "type": "string", "format": "date-time" }
+              }
+            },
+            "access_token": { "type": "string", "description": "HMAC-SHA256 bearer token" },
+            "token_type": { "type": "string", "example": "Bearer" },
+            "expires_in": { "type": "integer", "example": 3600 }
+          }
+        },
+        "ErrorResponse": {
+          "type": "object",
+          "required": ["error"],
+          "properties": {
+            "error": { "type": "string", "example": "invalid email or password" }
+          }
       }
     }
   }

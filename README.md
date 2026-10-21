@@ -44,7 +44,7 @@ Kode dipisah ke `handler`, `service`, `repository`, `model`, `database`, `config
 
 ## Authentication
 
-Jalankan migration `011_create_users.sql` untuk membuat tabel user. Set `AUTH_TOKEN_SECRET` ke secret acak minimal 32 karakter; aplikasi menolak start jika secret tidak tersedia atau terlalu pendek. Password disimpan sebagai hash bcrypt, dan token bearer HMAC-SHA256 berlaku selama satu jam.
+Jalankan migration `011_create_users.sql` dan `012_auth_users_password_compatibility.sql` untuk menyiapkan tabel user dan menyesuaikan nama kolom password pada schema yang sudah ada. Set `AUTH_TOKEN_SECRET` ke secret acak minimal 32 karakter; aplikasi menolak start jika secret tidak tersedia atau terlalu pendek. Password disimpan sebagai hash bcrypt, dan token bearer HMAC-SHA256 berlaku selama satu jam.
 
 - `POST /api/v1/auth/register` menerima `name`, `email`, dan `password` (minimal 8 karakter). Email yang sudah terdaftar menghasilkan `409 Conflict`.
 - `POST /api/v1/auth/login` menerima `email` dan `password`; kredensial salah menghasilkan `401 Unauthorized`.
@@ -238,4 +238,3 @@ Contoh signature webhook dapat dibuat dengan HMAC-SHA256 atas bytes body persis 
 - Posting ledger memakai dua kode akun demo tetap dan tidak mengonversi mata uang.
 - Domain finansial lengkap pada migration `005`/`006` masih perlu direkonsiliasi dengan skema payment aktif.
 - Gunakan hanya untuk demo/pembelajaran, bukan pemrosesan uang produksi.
-
